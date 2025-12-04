@@ -1,12 +1,12 @@
-# 🤖 Robotics Club - Eless Backend
+# Eless Backend
 
-Django REST Framework backend for Robotics Club inventory management system with Flutter mobile app integration.
+Django REST Framework backend for device inventory management system with Flutter mobile app integration.
 
 ## 🌟 Features
 
 - **QR Code Authentication** - JWT-based authentication with QR scanning
-- **Device Inventory Management** - Track and manage robotics equipment
-- **Device Request System** - Students can request devices with admin approval workflow
+- **Device Inventory Management** - Track and manage equipment inventory
+- **Device Request System** - Users can request devices with admin approval workflow
 - **Push Notifications** - Firebase Cloud Messaging for real-time notifications
 - **Admin Dashboard** - Comprehensive Django admin for managing requests and devices
 - **Cart System** - User-specific device request cart
@@ -95,7 +95,7 @@ GOOGLE_SHEET_URL=your_google_sheet_url
 
 **Structure:**
 ```
-robotics_club/
+eless-backend/
 ├── credentials.json  (for Firestore/FCM)
 └── firebase_keys/
     └── your-firebase-adminsdk.json
@@ -182,8 +182,8 @@ python -c 'from django.core.management.utils import get_random_secret_key; print
 ### Core Models
 
 - **Member** - User accounts with QR authentication
-- **Device** - Robotics equipment inventory
-- **DeviceRequest** - Student device requests
+- **Device** - Equipment inventory
+- **DeviceRequest** - User device requests
 - **AdminAction** - Admin approval/rejection actions
 - **PushNotification** - FCM push notifications
 - **Notification** - In-app notifications
