@@ -1,0 +1,23 @@
+{% extends "admin/change_list.html" %}
+{% load static %}
+
+{% block object-tools-items %}
+    {{ block.super }}
+    
+    {% if show_export_button %}
+    <li>
+        <a href="{% url 'admin:devicerequest_export_now' %}" 
+           class="button" 
+           style="background-color: #28a745; color: white; padding: 10px 20px; border-radius: 4px; text-decoration: none; display: inline-block; font-weight: bold;"
+           onclick="return confirm('Export all device requests to Google Sheets now?');">
+            📊 Export Data to Google Sheets
+        </a>
+    </li>
+    {% elif sheet_url_missing %}
+    <li>
+        <span class="button" style="background-color: #ffc107; color: #000; padding: 10px 20px; border-radius: 4px; display: inline-block; font-weight: bold;" title="Configure GOOGLE_SHEET_URL in .env file">
+            ⚠️ Configure Google Sheet URL
+        </span>
+    </li>
+    {% endif %}
+{% endblock %}

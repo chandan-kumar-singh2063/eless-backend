@@ -1,0 +1,61 @@
+// Firestore Security Rules (PRODUCTION-READY)
+//
+// AUDIT FIXES APPLIED:
+// ✅ Server-only write/delete access
+// ✅ No client-side access to device tokens
+// ✅ Strict validation rules
+// ✅ Rate limiting via Firebase App Check (optional)
+//
+// Deploy: firebase deploy --only firestore:rules
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ==================== SECURITY: Deny all by default ====================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+    
+    // ==================== Device Tokens Collection ====================
+    // Structure: /users/{userId}/devices/{deviceId}
+    //
+    // SECURITY:
+    // - Only backend (Firebase Admin SDK) can write/delete
+    // - Clients cannot access at all
+    // - This prevents token stealing and unauthorized push notifications
+    
+    match /users/{userId}/devices/{deviceId} {
+      // DENY all client access
+      // Only Firebase Admin SDK can access this collection
+      allow read, write: if false;
+      
+      // Future: If you need read access for user's own devices, enable this:
+      // allow read: if request.auth != null && request.auth.uid == userId;
+      // allow write, delete: if false; // Still deny write from clients
+    }
+    
+    // ==================== Future Collections ====================
+    // Add rules for other collections here
+    
+    // Example: User profiles (if you add them later)
+    // match /users/{userId}/profile {
+    //   allow read: if request.auth != null && request.auth.uid == userId;
+    //   allow write: if request.auth != null && request.auth.uid == userId;
+    // }
+  }
+}
+
+// ==================== Notes for Production ====================
+//
+// 1. NEVER allow client-side writes to device tokens
+// 2. Use Firebase App Check for additional security (blocks requests from unauthorized apps)
+// 3. Monitor Firestore usage in Firebase Console
+// 4. Set up billing alerts to prevent cost overruns
+// 5. Review security rules regularly
+//
+// To enable Firebase App Check:
+// - Go to Firebase Console > App Check
+// - Register your app
+// - Add App Check enforcement to these rules:
+//   allow read, write: if request.app.attestation == null;

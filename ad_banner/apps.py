@@ -1,0 +1,7 @@
+from django.apps import AppConfig
+
+
+class AdBannerConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'ad_banner'
+    verbose_name = 'Advertisement Banners'
