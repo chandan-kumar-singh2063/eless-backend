@@ -21,7 +21,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-zcl^v2o=+7pmv4idhr*516ob7(
 DEBUG = os.getenv("DEBUG", "True") == "True"
 
 # Allow all hosts in development, restrict in production via environment variable
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,167.71.232.113').split(',')
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,167.71.232.113,www.ckseless.me,ckseless.me').split(',')
 
 # Application definition
 INSTALLED_APPS = [
@@ -155,8 +155,10 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1",
     "http://167.71.232.113",
     "https://167.71.232.113",
-    # Add your domain when you have one:
-    # "https://yourdomain.com",
+    "http://www.ckseless.me",
+    "https://www.ckseless.me",
+    "http://ckseless.me",
+    "https://ckseless.me",
 ]
 
 # Add CORS settings for Flutter app
@@ -165,9 +167,12 @@ CSRF_TRUSTED_ORIGINS = [
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",  # Flutter web (development)
     "http://127.0.0.1:3000",  # Flutter web (development)
-    # Add production domains here:
-    # "https://yourdomain.com",
-    # "https://app.yourdomain.com",
+    "http://167.71.232.113",  # Production droplet IP
+    "https://167.71.232.113",
+    "http://www.ckseless.me",  # Production domain
+    "https://www.ckseless.me",
+    "http://ckseless.me",
+    "https://ckseless.me",
 ]
 
 # SECURITY: NEVER set CORS_ALLOW_ALL_ORIGINS=True in production!
