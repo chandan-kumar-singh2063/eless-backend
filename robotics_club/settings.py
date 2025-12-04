@@ -21,7 +21,7 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-zcl^v2o=+7pmv4idhr*516ob7(
 DEBUG = os.getenv("DEBUG", "True") == "True"
 
 # Allow all hosts in development, restrict in production via environment variable
-ALLOWED_HOSTS = ['*', 'localhost', '127.0.0.1', '192.168.1.71']
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1,167.71.232.113').split(',')
 
 # Application definition
 INSTALLED_APPS = [
@@ -118,6 +118,7 @@ DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
 # Media settings
 MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -143,10 +144,20 @@ USE_TZ = True  # Keep timezone awareness on
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# CSRF Protection for production
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost",
+    "http://127.0.0.1",
+    "http://167.71.232.113",
+    "https://167.71.232.113",
+    # Add your domain when you have one:
+    # "https://yourdomain.com",
+]
 
 # Add CORS settings for Flutter app
 # SECURITY FIX: Restrict CORS to specific origins (Bug #7)
