@@ -44,7 +44,13 @@ class UserDeviceRequestSerializer(serializers.ModelSerializer):
         if not latest_action:
             return 'pending'
         
-        if latest_action.action_type == 'approve':
+        # Handle return action
+        if latest_action.action_type == 'return':
+            return 'returned'
+        elif latest_action.action_type == 'approve':
+            # Check if actually returned via status
+            if latest_action.status == 'returned':
+                return 'returned'
             return 'approved'
         elif latest_action.action_type == 'reject':
             return 'rejected'

@@ -61,10 +61,18 @@ def format_device_request_data(request_obj):
             overall_status = 'pending'
             status_display = 'Pending Review'
         else:
-            if latest_action.action_type == 'approve':
+            # Check for return action first (most recent lifecycle stage)
+            if latest_action.action_type == 'return':
+                overall_status = 'returned'
+                status_display = 'Returned'
+            elif latest_action.action_type == 'approve':
+                # Check the status field for returned/overdue
                 if latest_action.status == 'returned':
                     overall_status = 'returned'
                     status_display = 'Returned'
+                elif latest_action.status == 'overdue':
+                    overall_status = 'overdue'
+                    status_display = f'Overdue ({latest_action.approved_quantity})'
                 else:
                     overall_status = 'approved'
                     status_display = f'Approved ({latest_action.approved_quantity})'
@@ -316,7 +324,9 @@ class RequestStatusAPIView(View):
                     'action_display': action.get_action_type_display(),
                     'approved_quantity': action.approved_quantity,
                     'status': action.status,
-                    'created_at': action.created_at.strftime('%Y-%m-%d'),
+                    'status_display': action.get_status_display() if action.status else 'N/A',
+                    'created_at': action.created_at.strftime('%Y-%m-%d %H:%M'),
+                    'updated_at': action.updated_at.strftime('%Y-%m-%d %H:%M'),
                     'is_overdue': action.is_overdue()
                 })
             
@@ -354,7 +364,9 @@ class AdminActionsAPIView(View):
                     'action_display': action.get_action_type_display(),
                     'approved_quantity': action.approved_quantity,
                     'status': action.status,
-                    'created_at': action.created_at.strftime('%Y-%m-%d'),
+                    'status_display': action.get_status_display() if action.status else 'N/A',
+                    'created_at': action.created_at.strftime('%Y-%m-%d %H:%M'),
+                    'updated_at': action.updated_at.strftime('%Y-%m-%d %H:%M'),
                     'is_overdue': action.is_overdue()
                 })
             
@@ -363,6 +375,7 @@ class AdminActionsAPIView(View):
                 'request_id': request_id,
                 'device_name': device_request.device.name,
                 'user_name': device_request.name,
+                'roll_no': device_request.roll_no,
                 'actions_count': len(actions_data),
                 'admin_actions': actions_data,
                 'message': f'Found {len(actions_data)} admin actions for request #{request_id}'

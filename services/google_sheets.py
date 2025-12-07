@@ -113,10 +113,34 @@ class GoogleSheetsExporter:
             # Prepare data rows
             data_rows = []
             for idx, request in enumerate(device_requests, start=1):
-                # Get admin action for this request
+                # Get latest admin action for this request
                 admin_action = AdminAction.objects.filter(
                     device_request=request
                 ).order_by('-created_at').first()
+                
+                # Determine final status based on action type
+                if admin_action:
+                    # If return action exists, show as returned
+                    if admin_action.action_type == 'return':
+                        action_display = 'Returned'
+                        status_display = 'Returned'
+                    elif admin_action.action_type == 'approve':
+                        action_display = 'Approved'
+                        if admin_action.status == 'returned':
+                            status_display = 'Returned'
+                        elif admin_action.status == 'overdue':
+                            status_display = 'Overdue'
+                        else:
+                            status_display = 'On Service'
+                    elif admin_action.action_type == 'reject':
+                        action_display = 'Rejected'
+                        status_display = 'Rejected'
+                    else:
+                        action_display = admin_action.get_action_type_display()
+                        status_display = admin_action.get_status_display()
+                else:
+                    action_display = 'Pending'
+                    status_display = 'Pending'
                 
                 # Prepare row data
                 row = [
@@ -129,10 +153,10 @@ class GoogleSheetsExporter:
                     request.expected_return_date.strftime('%Y-%m-%d') if request.expected_return_date else 'N/A',
                     request.purpose or 'N/A',
                     request.request_date.strftime('%Y-%m-%d'),
-                    admin_action.get_action_type_display() if admin_action else 'Pending',
+                    action_display,
                     admin_action.approved_quantity if admin_action else 0,
-                    admin_action.get_status_display() if admin_action else 'N/A',
-                    admin_action.created_at.strftime('%Y-%m-%d %I:%M %p') if admin_action else 'N/A'
+                    status_display,
+                    admin_action.updated_at.strftime('%Y-%m-%d %I:%M %p') if admin_action else 'N/A'
                 ]
                 data_rows.append(row)
             

@@ -50,13 +50,31 @@ class DeviceRequestAdmin(admin.ModelAdmin):
     admin_status.short_description = 'Status'
     
     def quick_action(self, obj):
-        """Show quick action button for pending requests"""
-        actions = AdminAction.objects.filter(device_request=obj)
+        """Show appropriate quick action button based on current status"""
+        actions = AdminAction.objects.filter(device_request=obj).order_by('-created_at')
+        
         if not actions.exists():
+            # No actions yet - show "Take Action" for approval/rejection
             return format_html(
                 '<a class="button" href="/admin/services/adminaction/add/?device_request={}" style="background: #417690; color: white; padding: 5px 10px; border-radius: 3px; text-decoration: none;">Take Action</a>',
                 obj.id
             )
+        
+        latest_action = actions.first()
+        
+        # If approved and not yet returned, show "Mark as Returned" button
+        if latest_action.action_type == 'approve' and latest_action.status in ['on_service', 'overdue']:
+            return format_html(
+                '<a class="button" href="/admin/services/adminaction/add/?device_request={}" style="background: #28a745; color: white; padding: 5px 10px; border-radius: 3px; text-decoration: none;">Mark as Returned</a>',
+                obj.id
+            )
+        
+        # If rejected or already returned, no further action needed
+        if latest_action.action_type == 'reject':
+            return format_html('<span style="color: gray;">❌ Rejected</span>')
+        if latest_action.status == 'returned':
+            return format_html('<span style="color: green;">✅ Completed</span>')
+        
         return format_html('<span style="color: gray;">Action taken</span>')
     quick_action.short_description = 'Quick Action'
     
@@ -128,10 +146,11 @@ class DeviceRequestAdmin(admin.ModelAdmin):
 
 @admin.register(AdminAction)
 class AdminActionAdmin(admin.ModelAdmin):
-    list_display = ('get_user_name', 'get_device_name', 'get_requested_qty', 'action_type', 'approved_quantity', 'status', 'created_at')
+    list_display = ('get_user_name', 'get_device_name', 'get_requested_qty', 'get_action_badge', 'approved_quantity', 'get_status_badge', 'updated_at')
     list_filter = ('action_type', 'status', 'created_at', 'device')
     search_fields = ('device__name', 'device_request__name', 'device_request__roll_no')
     readonly_fields = ('device', 'created_at', 'updated_at', 'get_request_details')
+    date_hierarchy = 'created_at'
     
     fieldsets = (
         ('📋 Request Details (Read-Only)', {
@@ -139,12 +158,22 @@ class AdminActionAdmin(admin.ModelAdmin):
             'description': 'User and device information from the request'
         }),
         ('✅ Take Action', {
-            'fields': ('device_request', 'action_type', 'approved_quantity', 'status'),
-            'description': 'Select the request above, then choose your action'
+            'fields': ('device_request', 'action_type', 'approved_quantity'),
+            'description': '''
+                <strong>📖 Workflow Instructions:</strong><br><br>
+                <strong>Step 1:</strong> Select the device request from dropdown<br>
+                <strong>Step 2:</strong> Choose action type:<br>
+                &nbsp;&nbsp;• <strong style="color: green;">Approved</strong> - Accept request and allocate device(s)<br>
+                &nbsp;&nbsp;• <strong style="color: red;">Rejected</strong> - Decline the request<br>
+                &nbsp;&nbsp;• <strong style="color: blue;">Returned</strong> - Mark approved device as returned by user<br>
+                <strong>Step 3:</strong> For "Approved" action, enter quantity to allocate<br><br>
+                <em>💡 Note: Status (on service/overdue) auto-updates based on expected return date</em>
+            '''
         }),
-        ('⏰ Timestamps', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
+        ('📊 Advanced Details', {
+            'fields': ('status', 'created_at', 'updated_at'),
+            'classes': ('collapse',),
+            'description': 'Status auto-updates. Only modify if needed.'
         })
     )
     
@@ -159,6 +188,46 @@ class AdminActionAdmin(admin.ModelAdmin):
     def get_requested_qty(self, obj):
         return obj.device_request.requested_quantity
     get_requested_qty.short_description = 'Requested Qty'
+    
+    def get_action_badge(self, obj):
+        """Show action type with color badge"""
+        colors = {
+            'approve': 'green',
+            'reject': 'red',
+            'return': 'blue'
+        }
+        icons = {
+            'approve': '✅',
+            'reject': '❌',
+            'return': '🔄'
+        }
+        color = colors.get(obj.action_type, 'gray')
+        icon = icons.get(obj.action_type, '•')
+        return format_html(
+            '<span style="background: {}; color: white; padding: 3px 8px; border-radius: 3px; font-weight: bold;">{} {}</span>',
+            color, icon, obj.get_action_type_display()
+        )
+    get_action_badge.short_description = 'Action'
+    
+    def get_status_badge(self, obj):
+        """Show status with color badge"""
+        colors = {
+            'on_service': '#ff9800',  # Orange
+            'returned': '#4caf50',     # Green
+            'overdue': '#f44336'       # Red
+        }
+        icons = {
+            'on_service': '🔧',
+            'returned': '✅',
+            'overdue': '⚠️'
+        }
+        color = colors.get(obj.status, 'gray')
+        icon = icons.get(obj.status, '•')
+        return format_html(
+            '<span style="background: {}; color: white; padding: 3px 8px; border-radius: 3px; font-weight: bold;">{} {}</span>',
+            color, icon, obj.get_status_display()
+        )
+    get_status_badge.short_description = 'Current Status'
     
     def get_request_details(self, obj):
         """Show full request details in a nice format"""
@@ -185,24 +254,52 @@ class AdminActionAdmin(admin.ModelAdmin):
     get_request_details.short_description = 'Request Information'
     
     def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        """Filter device_request to show only pending requests (no actions yet)"""
+        """Filter device_request based on context - show pending OR approved (not returned)"""
         if db_field.name == "device_request":
-            # Get all device requests that don't have any admin actions yet
-            from django.db.models import Count
-            pending_requests = DeviceRequest.objects.annotate(
-                action_count=Count('adminaction')
-            ).filter(action_count=0).order_by('-request_date')
+            from django.db.models import Q, Count
             
-            kwargs["queryset"] = pending_requests
-            kwargs["help_text"] = "⚠️ Only showing pending requests (no actions taken yet)"
+            # Show requests that either:
+            # 1. Have no actions yet (pending)
+            # 2. Are approved but not yet returned (on_service status)
+            device_requests = DeviceRequest.objects.annotate(
+                action_count=Count('adminaction')
+            ).filter(
+                Q(action_count=0) |  # No actions yet (pending)
+                Q(adminaction__action_type='approve', 
+                  adminaction__status__in=['on_service', 'overdue'])  # Approved but not returned
+            ).distinct().order_by('-request_date')
+            
+            kwargs["queryset"] = device_requests
+            kwargs["help_text"] = "💡 Showing: Pending requests OR Approved items (not yet returned)"
         
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
     
     def save_model(self, request, obj, form, change):
-        """Auto-set device from device_request"""
+        """Auto-set device and status based on action_type"""
         if obj.device_request:
             obj.device = obj.device_request.device
+        
+        # Auto-set status based on action_type for consistency
+        if obj.action_type == 'return':
+            obj.status = 'returned'
+        elif obj.action_type == 'reject':
+            obj.approved_quantity = 0  # No quantity for rejected requests
+        elif obj.action_type == 'approve':
+            # Status will be set by model's save() method based on return date
+            if not obj.approved_quantity or obj.approved_quantity == 0:
+                from django.contrib import messages
+                messages.warning(request, '⚠️ Please enter approved quantity')
+        
         super().save_model(request, obj, form, change)
+        
+        # Show success message with action taken
+        from django.contrib import messages
+        action_msg = {
+            'approve': f'✅ Approved {obj.approved_quantity} unit(s) for {obj.device_request.name}',
+            'reject': f'❌ Rejected request from {obj.device_request.name}',
+            'return': f'🔄 Marked as returned by {obj.device_request.name}'
+        }
+        messages.success(request, action_msg.get(obj.action_type, 'Action completed'))
 
 admin.site.site_header = "🤖 Robotics Club - Inventory Management"
 admin.site.site_title = "Robotics Club Admin"
