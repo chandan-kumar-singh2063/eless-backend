@@ -10,6 +10,7 @@ from datetime import datetime
 import logging
 import pytz
 from django.utils import timezone
+from robotics_club.pagination import create_paginated_response
 
 logger = logging.getLogger(__name__)
 
@@ -151,24 +152,43 @@ class ServicesStatsAPIView(View):
 
 # 2. DEVICES LIST API
 class DevicesListAPIView(View):
-    """Get all devices with availability"""
+    """Get all devices with availability - Supports pagination"""
     
     def get(self, request):
         try:
             devices = Device.objects.all().order_by('name')
-            devices_data = []
             
-            for device in devices:
-                device.refresh_inventory()
-                formatted_data = format_device_data(device, include_thumbnail=True)
-                if formatted_data:
-                    devices_data.append(formatted_data)
+            # Check if pagination is requested
+            page_param = request.GET.get('page')
             
-            return JsonResponse({
-                'success': True,
-                'count': len(devices_data),
-                'devices': devices_data
-            })
+            if page_param:
+                # PAGINATED RESPONSE
+                def format_device_with_refresh(device):
+                    device.refresh_inventory()
+                    return format_device_data(device, include_thumbnail=True)
+                
+                return create_paginated_response(
+                    request,
+                    devices,
+                    format_device_with_refresh,
+                    page_size=12,
+                    max_page_size=50
+                )
+            else:
+                # NON-PAGINATED RESPONSE - Backward compatibility
+                devices_data = []
+                
+                for device in devices:
+                    device.refresh_inventory()
+                    formatted_data = format_device_data(device, include_thumbnail=True)
+                    if formatted_data:
+                        devices_data.append(formatted_data)
+                
+                return JsonResponse({
+                    'success': True,
+                    'count': len(devices_data),
+                    'devices': devices_data
+                })
             
         except Exception as e:
             logger.error(f"Error in DevicesListAPIView: {str(e)}")

@@ -4,6 +4,8 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny
 from .models import Notification
 import logging
+from robotics_club.pagination import paginate_queryset
+from django.http import JsonResponse
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +40,14 @@ def format_notification_for_flutter(notification):
 
 class NotificationsListAPIView(APIView):
     """
-    GET /api/notifications/ - List All Notifications (READ-ONLY)
+    GET /api/notifications/ - List All Notifications with Pagination Support
     
-    Returns all notifications for Flutter app.
+    Returns notifications for Flutter app with pagination.
     Flutter handles read/unread status locally using Hive storage.
+    
+    Query Parameters:
+        - page: Page number (default: 1)
+        - page_size: Items per page (default: 15, max: 50)
     """
     permission_classes = [AllowAny]
     
@@ -49,15 +55,44 @@ class NotificationsListAPIView(APIView):
         try:
             notifications = Notification.objects.all().order_by('-created_at')
             
-            results = []
-            for notification in notifications:
-                notification_data = format_notification_for_flutter(notification)
-                if notification_data:
-                    results.append(notification_data)
+            # Check if pagination is requested
+            page_param = request.GET.get('page')
             
-            return Response({
-                'results': results
-            }, status=status.HTTP_200_OK)
+            if page_param:
+                # PAGINATED RESPONSE
+                paginated_data = paginate_queryset(
+                    request,
+                    notifications,
+                    default_page_size=15,
+                    max_page_size=50
+                )
+                
+                # Serialize results
+                results = []
+                for notification in paginated_data['results']:
+                    notification_data = format_notification_for_flutter(notification)
+                    if notification_data:
+                        results.append(notification_data)
+                
+                return Response({
+                    'results': results,
+                    'next': paginated_data['next'],
+                    'previous': paginated_data['previous'],
+                    'count': paginated_data['count'],
+                    'page': paginated_data['page'],
+                    'total_pages': paginated_data['total_pages']
+                }, status=status.HTTP_200_OK)
+            else:
+                # NON-PAGINATED RESPONSE - Backward compatibility
+                results = []
+                for notification in notifications:
+                    notification_data = format_notification_for_flutter(notification)
+                    if notification_data:
+                        results.append(notification_data)
+                
+                return Response({
+                    'results': results
+                }, status=status.HTTP_200_OK)
             
         except Exception as e:
             logger.error(f"Error in NotificationsListAPIView: {str(e)}")

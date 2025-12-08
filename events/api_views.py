@@ -4,6 +4,7 @@ from django.views import View
 from .models import Event
 import json
 import logging
+from robotics_club.pagination import create_paginated_response
 
 logger = logging.getLogger(__name__)
 
@@ -170,87 +171,123 @@ class PastEventsAPIView(View):
 
 # FLUTTER-SPECIFIC API ENDPOINTS - Return exact format Flutter expects
 class FlutterOngoingEventsAPIView(View):
-    """Flutter-compatible ongoing events API - Returns array directly"""
+    """Flutter-compatible ongoing events API - Supports pagination"""
     
     def get(self, request):
         try:
             events = Event.objects.filter(event_type='ongoing').order_by('-created_at')
-            events_data = []
             
-            for event in events:
-                formatted_data = format_event_data_for_flutter(event)
-                if formatted_data:
-                    events_data.append(formatted_data)
-            
-            # Return array directly as Flutter expects
-            return JsonResponse(events_data, safe=False)
+            # Return paginated response
+            return create_paginated_response(
+                request,
+                events,
+                format_event_data_for_flutter,
+                page_size=10,
+                max_page_size=50
+            )
         except Exception as e:
             logger.error(f"Error in FlutterOngoingEventsAPIView: {str(e)}")
-            return JsonResponse([], safe=False)
+            return JsonResponse({'results': [], 'next': None, 'previous': None, 'count': 0})
 
 class FlutterUpcomingEventsAPIView(View):
-    """Flutter-compatible upcoming events API - Returns array directly"""
+    """Flutter-compatible upcoming events API - Supports pagination"""
     
     def get(self, request):
         try:
             events = Event.objects.filter(event_type='upcoming').order_by('date')  # Earliest first
-            events_data = []
             
-            for event in events:
-                formatted_data = format_event_data_for_flutter(event)
-                if formatted_data:
-                    events_data.append(formatted_data)
-            
-            # Return array directly as Flutter expects
-            return JsonResponse(events_data, safe=False)
+            # Return paginated response
+            return create_paginated_response(
+                request,
+                events,
+                format_event_data_for_flutter,
+                page_size=10,
+                max_page_size=50
+            )
         except Exception as e:
             logger.error(f"Error in FlutterUpcomingEventsAPIView: {str(e)}")
-            return JsonResponse([], safe=False)
+            return JsonResponse({'results': [], 'next': None, 'previous': None, 'count': 0})
 
 class FlutterPastEventsAPIView(View):
-    """Flutter-compatible past events API - Returns array directly"""
+    """Flutter-compatible past events API - Supports pagination"""
     
     def get(self, request):
         try:
             events = Event.objects.filter(event_type='past').order_by('-date')  # Most recent first
-            events_data = []
             
-            for event in events:
-                formatted_data = format_event_data_for_flutter(event)
-                if formatted_data:
-                    events_data.append(formatted_data)
-            
-            # Return array directly as Flutter expects
-            return JsonResponse(events_data, safe=False)
+            # Return paginated response
+            return create_paginated_response(
+                request,
+                events,
+                format_event_data_for_flutter,
+                page_size=10,
+                max_page_size=50
+            )
         except Exception as e:
             logger.error(f"Error in FlutterPastEventsAPIView: {str(e)}")
-            return JsonResponse([], safe=False)
+            return JsonResponse({'results': [], 'next': None, 'previous': None, 'count': 0})
 
 # NEW FLUTTER ENDPOINTS FOR EXPLORE SECTION
 class FlutterAllEventsAPIView(View):
-    """Flutter-compatible all events API - Returns categorized events"""
+    """Flutter-compatible all events API - Returns categorized events with pagination support"""
     
     def get(self, request):
         try:
-            # Get events by category
-            ongoing_events = Event.objects.filter(event_type='ongoing').order_by('-created_at')
-            upcoming_events = Event.objects.filter(event_type='upcoming').order_by('date')
-            past_events = Event.objects.filter(event_type='past').order_by('-date')
+            # Check if pagination is requested
+            page_param = request.GET.get('page')
             
-            # Format data for each category
-            ongoing_data = []
-            for event in ongoing_events:
-                formatted_data = format_event_data_for_flutter(event)
-                if formatted_data:
-                    ongoing_data.append(formatted_data)
-            
-            upcoming_data = []
-            for event in upcoming_events:
-                formatted_data = format_event_data_for_flutter(event)
-                if formatted_data:
-                    upcoming_data.append(formatted_data)
-            
-            past_data = []
+            if page_param:
+                # PAGINATED RESPONSE - For explore page horizontal scrolling
+                ongoing_events = Event.objects.filter(event_type='ongoing').order_by('-created_at')
+                upcoming_events = Event.objects.filter(event_type='upcoming').order_by('date')
+                past_events = Event.objects.filter(event_type='past').order_by('-date')
+                
+                # Paginate each category
+                from robotics_club.pagination import paginate_queryset
+                
+                ongoing_paginated = paginate_queryset(request, ongoing_events, default_page_size=10)
+                upcoming_paginated = paginate_queryset(request, upcoming_events, default_page_size=10)
+                past_paginated = paginate_queryset(request, past_events, default_page_size=10)
+                
+                # Serialize results
+                ongoing_data = [format_event_data_for_flutter(e) for e in ongoing_paginated['results'] if format_event_data_for_flutter(e)]
+                upcoming_data = [format_event_data_for_flutter(e) for e in upcoming_paginated['results'] if format_event_data_for_flutter(e)]
+                past_data = [format_event_data_for_flutter(e) for e in past_paginated['results'] if format_event_data_for_flutter(e)]
+                
+                return JsonResponse({
+                    'results': {
+                        'ongoing': ongoing_data,
+                        'upcoming': upcoming_data,
+                        'past': past_data
+                    },
+                    'next': ongoing_paginated['next'],  # Use ongoing as reference for next page
+                    'previous': ongoing_paginated['previous'],
+                    'count': {
+                        'ongoing': ongoing_paginated['count'],
+                        'upcoming': upcoming_paginated['count'],
+                        'past': past_paginated['count']
+                    }
+                })
+            else:
+                # NON-PAGINATED RESPONSE - For backward compatibility
+                ongoing_events = Event.objects.filter(event_type='ongoing').order_by('-created_at')
+                upcoming_events = Event.objects.filter(event_type='upcoming').order_by('date')
+                past_events = Event.objects.filter(event_type='past').order_by('-date')
+                
+                # Format data for each category
+                ongoing_data = []
+                for event in ongoing_events:
+                    formatted_data = format_event_data_for_flutter(event)
+                    if formatted_data:
+                        ongoing_data.append(formatted_data)
+                
+                upcoming_data = []
+                for event in upcoming_events:
+                    formatted_data = format_event_data_for_flutter(event)
+                    if formatted_data:
+                        upcoming_data.append(formatted_data)
+                
+                past_data = []
             for event in past_events:
                 formatted_data = format_event_data_for_flutter(event)
                 if formatted_data:
